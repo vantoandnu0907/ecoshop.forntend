@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoShop - Nông Sản Sạch</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+  body{ background:#f5f6f8; font-family:"Segoe UI",Arial,sans-serif; }
+  .navbar{ background:#2e7d32; }
+  .navbar-brand{ color:#fff!important; font-weight:bold; font-size:24px; }
+  .search-input{ max-width:320px; }
+  .category-btn{ margin:4px; }
+  .product-card{ transition:.3s; border:none; border-radius:15px; overflow:hidden; box-shadow:0 5px 15px rgba(0,0,0,.06); }
+  .product-card:hover{ transform:translateY(-5px); box-shadow:0 10px 25px rgba(0,0,0,.15); }
+  .product-card img{ height:200px; object-fit:cover; }
+  .price{ color:#2e7d32; font-weight:bold; font-size:18px; }
+  .old-price{ color:#999; text-decoration:line-through; font-size:13px; }
+  .cert-badge{ position:absolute; top:10px; left:10px; background:#e8f5e9; color:#2e7d32; border:1px solid #2e7d32; border-radius:20px; padding:3px 10px; font-size:12px; font-weight:bold; }
+  .empty-state{ text-align:center; padding:60px 20px; color:#888; }
+  footer{ background:#2e7d32; color:#fff; padding:25px; text-align:center; margin-top:50px; }
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark mb-4">
+  <div class="container d-flex flex-wrap gap-2 align-items-center">
+    <a class="navbar-brand" href="index.html">🌿 EcoShop</a>
+    <input type="text" id="search-input" class="form-control search-input" placeholder="Tìm sản phẩm...">
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <a href="cart.html" class="text-white text-decoration-none">
+        <i class="fa-solid fa-cart-shopping"></i> Giỏ hàng (<span id="cart-count">0</span>)
+      </a>
+      <span id="nav-account"></span>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <!-- Bộ lọc danh mục -->
+  <div class="text-center mb-4" id="category-filter">
+    <button class="btn btn-success category-btn" data-cat="Tất cả">Tất cả</button>
+    <button class="btn btn-outline-success category-btn" data-cat="Rau">🥬 Rau</button>
+    <button class="btn btn-outline-success category-btn" data-cat="Trái cây">🍊 Trái cây</button>
+    <button class="btn btn-outline-success category-btn" data-cat="Thịt">🥩 Thịt</button>
+    <button class="btn btn-outline-success category-btn" data-cat="Hải sản">🐟 Hải sản</button>
+    <button class="btn btn-outline-success category-btn" data-cat="Thực phẩm">🥚 Thực phẩm</button>
+  </div>
+
+  <!-- Grid sản phẩm -->
+  <div class="row g-4" id="product-grid"></div>
+</div>
+
+<footer>
+  <div>🌿 <strong>EcoShop</strong> — Nông sản sạch, minh bạch nguồn gốc.</div>
+</footer>
+
+<script src="app.js"></script>
+<script>
+  let activeCategory = "Tất cả";
+  let searchTerm = "";
+
+  function renderAccountLink(){
+    const user = getCurrentUser();
+    const el = document.getElementById("nav-account");
+    if(user){
+      el.innerHTML = `
+        <span class="text-white">Xin chào, ${user.name}</span>
+        ${user.role === "admin" ? '<a href="admin.html" class="btn btn-light btn-sm ms-2">Quản trị</a>' : ""}
+        <button class="btn btn-outline-light btn-sm ms-2" id="logout-btn">Đăng xuất</button>
+      `;
+      document.getElementById("logout-btn").addEventListener("click", logout);
+    }else{
+      el.innerHTML = `<a href="auth.html" class="btn btn-outline-light btn-sm">Đăng nhập</a>`;
+    }
+  }
+
+  function render(){
+    const grid = document.getElementById("product-grid");
+    const data = filterProducts(searchTerm, activeCategory);
+
+    if(data.length === 0){
+      grid.innerHTML = `<div class="empty-state col-12">
+        <i class="fa-solid fa-box-open fa-3x mb-3"></i>
+        <h4>Không tìm thấy sản phẩm phù hợp</h4>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = data.map(p => `
+      <div class="col-md-3 col-sm-6">
+        <div class="card product-card h-100 position-relative">
+          <span class="cert-badge">🌱 ${p.cert}</span>
+          <img src="${p.image}" class="card-img-top" alt="${p.name}">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">${p.name}</h5>
+            <p class="text-muted small mb-1">${p.category} · Còn ${p.stock} sản phẩm</p>
+            <div class="mb-2">
+              <span class="price">${formatMoney(p.price)}</span>
+              ${p.oldPrice ? `<span class="old-price ms-2">${formatMoney(p.oldPrice)}</span>` : ""}
+            </div>
+            <div class="mt-auto d-flex gap-2">
+              <a href="product.html?id=${p.id}" class="btn btn-outline-success flex-fill">Chi tiết</a>
+              <button class="btn btn-success" data-add="${p.id}" title="Thêm vào giỏ"><i class="fa fa-cart-plus"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    grid.querySelectorAll("[data-add]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = Number(btn.dataset.add);
+        addToCart(id, 1);
+        const p = findProduct(id);
+        Swal.fire({ toast:true, position:"top-end", icon:"success", title:`Đã thêm "${p.name}" vào giỏ`, timer:1500, showConfirmButton:false });
+      });
+    });
+  }
+
+  document.getElementById("category-filter").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-cat]");
+    if(!btn) return;
+    document.querySelectorAll("#category-filter button").forEach(b => {
+      b.classList.remove("btn-success"); b.classList.add("btn-outline-success");
+    });
+    btn.classList.remove("btn-outline-success"); btn.classList.add("btn-success");
+    activeCategory = btn.dataset.cat;
+    render();
+  });
+
+  document.getElementById("search-input").addEventListener("input", (e) => {
+    searchTerm = e.target.value;
+    render();
+  });
+
+  renderAccountLink();
+  render();
+</script>
+</body>
+</html>
